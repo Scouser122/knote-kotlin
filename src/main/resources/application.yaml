@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: knote-kotlin
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/dev
+
+knote:
+  upload-dir: '/tmp/uploads/'
+
+#logging:
+#  level:
+#    org.springframework: DEBUG
