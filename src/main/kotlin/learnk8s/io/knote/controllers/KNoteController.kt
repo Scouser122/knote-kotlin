@@ -1,16 +1,17 @@
 package learnk8s.io.knote.controllers
 
+import io.minio.MinioClient
+import jakarta.annotation.PostConstruct
 import learnk8s.io.knote.config.properties.KnoteProperties
 import learnk8s.io.knote.orm.model.Note
 import learnk8s.io.knote.orm.repository.NotesRepository
-import org.commonmark.node.Node
+import org.apache.commons.io.IOUtils
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
+import org.springframework.http.MediaType
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import java.io.File
 import java.util.*
@@ -23,6 +24,12 @@ class KNoteController(
 ) {
     private val parser = Parser.builder().build()
     private val renderer = HtmlRenderer.builder().build()
+    private var minioClient: MinioClient? = null
+
+    @PostConstruct
+    fun init() {
+        initMinio()
+    }
 
     @GetMapping("/")
     fun index(model: Model?): String {
@@ -54,6 +61,14 @@ class KNoteController(
         return "index"
     }
 
+    @GetMapping(value = ["/img/{name}"], produces = [MediaType.IMAGE_PNG_VALUE])
+    @ResponseBody
+    @Throws(java.lang.Exception::class)
+    fun getImageByName(@PathVariable name: String?): ByteArray {
+        val imageStream = minioClient!!.getObject(properties.minioBucket, name)
+        return IOUtils.toByteArray(imageStream)
+    }
+
     private fun getAllNotes(model: Model) {
         val notes: List<Note?> = notesRepository.findAll()
         Collections.reverse(notes)
@@ -69,14 +84,51 @@ class KNoteController(
     }
 
     private fun uploadImage(file: MultipartFile, description: String, model: Model) {
-        val uploadsDir: File = File(properties.uploadDir)
-        if (!uploadsDir.exists()) {
-            uploadsDir.mkdir()
-        }
+//        val uploadsDir: File = File(properties.uploadDir)
+//        if (!uploadsDir.exists()) {
+//            uploadsDir.mkdir()
+//        }
         val fileId = (UUID.randomUUID().toString() + "."
                 + file.originalFilename!!.split("\\.".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[1])
-        file.transferTo(File(properties.uploadDir + fileId))
-        model.addAttribute("description", "/uploads/$fileId")
+//        file.transferTo(File(properties.uploadDir + fileId))
+        minioClient!!.putObject(properties.minioBucket, fileId, file.getInputStream(),
+            file.getSize(), null, null, file.getContentType());
+        model.addAttribute("description", "/img/$fileId")
     }
 
+    @Throws(InterruptedException::class)
+    private fun initMinio() {
+        var success = false
+        while (!success) {
+            try {
+                minioClient = MinioClient(
+                    "http://" + properties.minioHost + ":9000",
+                    properties.minioAccessKey,
+                    properties.minioSecretKey,
+                    false
+                )
+                // Check if the bucket already exists.
+                val isExist: Boolean = minioClient!!.bucketExists(properties.minioBucket)
+                if (isExist) {
+                    println("> Bucket already exists.")
+                } else {
+                    minioClient!!.makeBucket(properties.minioBucket)
+                }
+                success = true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                println("> Minio Reconnect: " + properties.minioReconnectEnabled)
+                if (properties.minioReconnectEnabled) {
+                    try {
+                        Thread.sleep(5000)
+                    } catch (ex: InterruptedException) {
+                        ex.printStackTrace()
+                    }
+                } else {
+                    success = true
+                }
+            }
+        }
+        println("> Minio initialized!")
+    }
 }

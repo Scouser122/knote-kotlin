@@ -12,12 +12,12 @@ import org.springframework.web.servlet.resource.PathResourceResolver
 class KnoteConfig(
     private val properties: KnoteProperties
 ) : WebMvcConfigurer {
-    override fun addResourceHandlers(registry: ResourceHandlerRegistry) {
-        registry
-            .addResourceHandler("/uploads/**")
-            .addResourceLocations("file:" + properties.uploadDir)
-            .setCachePeriod(3600)
-            .resourceChain(true)
-            .addResolver(PathResourceResolver())
-    }
+//    override fun addResourceHandlers(registry: ResourceHandlerRegistry) {
+//        registry
+//            .addResourceHandler("/uploads/**")
+//            .addResourceLocations("file:" + properties.uploadDir)
+//            .setCachePeriod(3600)
+//            .resourceChain(true)
+//            .addResolver(PathResourceResolver())
+//    }
 }
